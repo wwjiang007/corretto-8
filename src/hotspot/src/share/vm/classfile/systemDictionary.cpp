@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1026,14 +1026,21 @@ Klass* SystemDictionary::parse_stream(Symbol* class_name,
   //
   // Note: "name" is updated.
 
-  instanceKlassHandle k = ClassFileParser(st).parseClassFile(class_name,
-                                                             loader_data,
-                                                             protection_domain,
-                                                             host_klass,
-                                                             cp_patches,
-                                                             parsed_name,
-                                                             true,
-                                                             THREAD);
+  instanceKlassHandle k;
+  {
+  // Callers are expected to declare a ResourceMark to determine
+  // the lifetime of any updated (resource) allocated under
+  // this call to parseClassFile
+  ResourceMark rm(THREAD);
+  k = ClassFileParser(st).parseClassFile(class_name,
+                                         loader_data,
+                                         protection_domain,
+                                         host_klass,
+                                         cp_patches,
+                                         parsed_name,
+                                         true,
+                                         THREAD);
+  }
 
 
   if (host_klass.not_null() && k.not_null()) {
@@ -1120,6 +1127,10 @@ Klass* SystemDictionary::resolve_from_stream(Symbol* class_name,
   //
   // Note: "name" is updated.
 
+  // Callers are expected to declare a ResourceMark to determine
+  // the lifetime of any updated (resource) allocated under
+  // this call to parseClassFile
+  ResourceMark rm(THREAD);
   ClassFileParser parser(st);
   instanceKlassHandle k = parser.parseClassFile(class_name,
                                                 loader_data,

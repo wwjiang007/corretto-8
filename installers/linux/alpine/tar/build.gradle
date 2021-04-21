@@ -55,17 +55,20 @@ task copySource(type: Copy) {
 task configureBuild(type: Exec) {
     dependsOn copySource
     workingDir "$buildRoot/src"
+
+    def milestone = project.findProperty("corretto.milestone") ?: "fcs"
     commandLine 'bash', 'configure',
             "--with-update-version=${project.version.update}",
             "--with-build-number=b${project.version.build}",
             "--with-corretto-revision=${project.version.revision}",
-            '--with-milestone=fcs',
+            "--with-milestone=${milestone}",
             '--disable-debug-symbols',
             '--disable-zip-debug-info',
             'LIBCXX=-static-libstdc++ -static-libgcc',
             '--with-vendor-name=Amazon.com Inc.',
             '--with-vendor-url=https://aws.amazon.com/corretto/',
-            "--with-vendor-bug-url=https://github.com/corretto/corretto-${version.major}/issues/"
+            "--with-vendor-bug-url=https://github.com/corretto/corretto-${version.major}/issues/",
+            "--with-vendor-vm-bug-url=https://github.com/corretto/corretto-${version.major}/issues/"
 }
 
 task executeBuild(type: Exec) {
@@ -99,6 +102,7 @@ task copyBuildResults() {
                 include 'ASSEMBLY_EXCEPTION'
                 include 'LICENSE'
                 include 'THIRD_PARTY_README'
+                include 'commitId.txt'
                 include 'version.txt'
             }
             into destination

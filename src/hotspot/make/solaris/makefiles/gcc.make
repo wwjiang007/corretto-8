@@ -116,11 +116,9 @@ endif
 
 
 # Compiler warnings are treated as errors 
-ifneq ($(COMPILER_WARNINGS_FATAL),false)
-WARNINGS_ARE_ERRORS = -Werror
-endif
+WARNINGS_ARE_ERRORS = -Werror 
 # Enable these warnings. See 'info gcc' about details on these options
-WARNING_FLAGS = -Wpointer-arith -Wconversion -Wsign-compare -Wundef
+WARNING_FLAGS = -Wpointer-arith -Wconversion -Wsign-compare -Wundef -Wformat=2
 CFLAGS_WARN/DEFAULT = $(WARNINGS_ARE_ERRORS) $(WARNING_FLAGS)
 # Special cases 
 CFLAGS_WARN/BYFILE = $(CFLAGS_WARN/$@)$(CFLAGS_WARN/DEFAULT$(CFLAGS_WARN/$@))  

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2020, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -96,18 +96,6 @@ void os_init_globals() {
   os::init_globals();
 }
 
-static time_t get_timezone(const struct tm* time_struct) {
-#if defined(_ALLBSD_SOURCE)
-  return time_struct->tm_gmtoff;
-#elif defined(_WINDOWS)
-  long zone;
-  _get_timezone(&zone);
-  return static_cast<time_t>(zone);
-#else
-  return timezone;
-#endif
-}
-
 int os::snprintf(char* buf, size_t len, const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
@@ -154,17 +142,31 @@ char* os::iso8601_time(char* buffer, size_t buffer_length) {
     assert(false, "Failed localtime_pd");
     return NULL;
   }
-  const time_t zone = get_timezone(&time_struct);
 
-  // If daylight savings time is in effect,
-  // we are 1 hour East of our time zone
   const time_t seconds_per_minute = 60;
   const time_t minutes_per_hour = 60;
   const time_t seconds_per_hour = seconds_per_minute * minutes_per_hour;
-  time_t UTC_to_local = zone;
+
+  time_t UTC_to_local = 0;
+#if defined(_ALLBSD_SOURCE) || defined(_GNU_SOURCE)
+    UTC_to_local = -(time_struct.tm_gmtoff);
+#elif defined(_WINDOWS)
+  long zone;
+  _get_timezone(&zone);
+  UTC_to_local = static_cast<time_t>(zone);
+#else
+  UTC_to_local = timezone;
+#endif
+
+  // tm_gmtoff already includes adjustment for daylight saving
+#if !defined(_ALLBSD_SOURCE) && !defined(_GNU_SOURCE)
+  // If daylight savings time is in effect,
+  // we are 1 hour East of our time zone
   if (time_struct.tm_isdst > 0) {
     UTC_to_local = UTC_to_local - seconds_per_hour;
   }
+#endif
+
   // Compute the time zone offset.
   //    localtime_pd() sets timezone to the difference (in seconds)
   //    between UTC and and local time.
@@ -549,14 +551,6 @@ char *os::strdup(const char *str, MEMFLAGS flags) {
   return dup_str;
 }
 
-
-char* os::strdup_check_oom(const char* str, MEMFLAGS flags) {
-  char* p = os::strdup(str, flags);
-  if (p == NULL) {
-    vm_exit_out_of_memory(strlen(str) + 1, OOM_MALLOC_ERROR, "os::strdup_check_oom");
-  }
-  return p;
-}
 
 
 #define paranoid                 0  /* only set to 1 if you suspect checking code has bug */
@@ -1280,7 +1274,7 @@ char** os::split_path(const char* path, int* n) {
 }
 
 void os::set_memory_serialize_page(address page) {
-  int count = log2_intptr((uintptr_t) sizeof(class JavaThread)) - log2_int(64);
+  int count = log2_intptr(sizeof(class JavaThread)) - log2_int(64);
   _mem_serialize_page = (volatile int32_t *)page;
   // We initialize the serialization page shift count here
   // We assume a cache line size of 64 bytes

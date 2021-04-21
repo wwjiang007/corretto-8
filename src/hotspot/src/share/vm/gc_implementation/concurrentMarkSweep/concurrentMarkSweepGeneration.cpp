@@ -63,12 +63,6 @@
 #include "runtime/vmThread.hpp"
 #include "services/memoryService.hpp"
 #include "services/runtimeService.hpp"
-#include "utilities/dtrace.hpp"
-
-#ifndef USDT2
-  HS_DTRACE_PROBE_DECL4(provider, gc__collection__contig__begin, bool, bool, size_t, bool);
-  HS_DTRACE_PROBE_DECL4(provider, gc__collection__contig__end, bool, bool, size_t, bool);
-#endif /* !USDT2 */
 
 PRAGMA_FORMAT_MUTE_WARNINGS_FOR_GCC
 
@@ -967,7 +961,7 @@ void ConcurrentMarkSweepGeneration::compute_new_size_free_list() {
   if (free_percentage < desired_free_percentage) {
     size_t desired_capacity = (size_t)(used() / ((double) 1 - desired_free_percentage));
     assert(desired_capacity >= capacity(), "invalid expansion size");
-    size_t expand_bytes = MAX2(desired_capacity - capacity(), (size_t) MinHeapDeltaBytes);
+    size_t expand_bytes = MAX2(desired_capacity - capacity(), MinHeapDeltaBytes);
     if (PrintGCDetails && Verbose) {
       size_t desired_capacity = (size_t)(used() / ((double) 1 - desired_free_percentage));
       gclog_or_tty->print_cr("\nFrom compute_new_size: ");
@@ -1684,13 +1678,7 @@ void ConcurrentMarkSweepGeneration::collect(bool   full,
                                             size_t size,
                                             bool   tlab)
 {
-#ifndef USDT2
-  HS_DTRACE_PROBE4(hotspot, gc__collection__contig__begin, full, clear_all_soft_refs, size, tlab);
-#endif /* !USDT2 */
   collector()->collect(full, clear_all_soft_refs, size, tlab);
-#ifndef USDT2
-  HS_DTRACE_PROBE4(hotspot, gc__collection__contig__end, full, clear_all_soft_refs, size, tlab);
-#endif /* !USDT2 */
 }
 
 void CMSCollector::collect(bool   full,
@@ -6603,7 +6591,7 @@ void CMSCollector::reset(bool asynch) {
     HeapWord* curAddr = _markBitMap.startWord();
     while (curAddr < _markBitMap.endWord()) {
       size_t remaining  = pointer_delta(_markBitMap.endWord(), curAddr);
-      MemRegion chunk(curAddr, MIN2((size_t) CMSBitMapYieldQuantum, remaining));
+      MemRegion chunk(curAddr, MIN2(CMSBitMapYieldQuantum, remaining));
       _markBitMap.clear_large_range(chunk);
       if (ConcurrentMarkSweepThread::should_yield() &&
           !foregroundGCIsActive() &&
@@ -6740,7 +6728,7 @@ size_t CMSCollector::block_size_if_printezis_bits(HeapWord* addr) const {
 HeapWord* CMSCollector::next_card_start_after_block(HeapWord* addr) const {
   size_t sz = 0;
   oop p = (oop)addr;
-  if (p->klass_or_null() != NULL) {
+  if (p->klass_or_null_acquire() != NULL) {
     sz = CompactibleFreeListSpace::adjustObjectSize(p->size());
   } else {
     sz = block_size_using_printezis_bits(addr);
@@ -6901,7 +6889,7 @@ void CMSMarkStack::expand() {
     return;
   }
   // Double capacity if possible
-  size_t new_capacity = MIN2(_capacity*2, (size_t) MarkStackSizeMax);
+  size_t new_capacity = MIN2(_capacity*2, MarkStackSizeMax);
   // Do not give up existing stack until we have managed to
   // get the double capacity that we desired.
   ReservedSpace rs(ReservedSpace::allocation_align_size_up(
@@ -7198,7 +7186,7 @@ size_t ScanMarkedObjectsAgainCarefullyClosure::do_object_careful_m(
   }
   if (_bitMap->isMarked(addr)) {
     // it's marked; is it potentially uninitialized?
-    if (p->klass_or_null() != NULL) {
+    if (p->klass_or_null_acquire() != NULL) {
         // an initialized object; ignore mark word in verification below
         // since we are running concurrent with mutators
         assert(p->is_oop(true), "should be an oop");
@@ -7239,7 +7227,7 @@ size_t ScanMarkedObjectsAgainCarefullyClosure::do_object_careful_m(
     }
   } else {
     // Either a not yet marked object or an uninitialized object
-    if (p->klass_or_null() == NULL) {
+    if (p->klass_or_null_acquire() == NULL) {
       // An uninitialized object, skip to the next card, since
       // we may not be able to read its P-bits yet.
       assert(size == 0, "Initial value");
@@ -7450,7 +7438,7 @@ bool MarkFromRootsClosure::do_bit(size_t offset) {
     assert(_skipBits == 0, "tautology");
     _skipBits = 2;  // skip next two marked bits ("Printezis-marks")
     oop p = oop(addr);
-    if (p->klass_or_null() == NULL) {
+    if (p->klass_or_null_acquire() == NULL) {
       DEBUG_ONLY(if (!_verifying) {)
         // We re-dirty the cards on which this object lies and increase
         // the _threshold so that we'll come back to scan this object
@@ -7470,7 +7458,7 @@ bool MarkFromRootsClosure::do_bit(size_t offset) {
           if (_threshold < end_card_addr) {
             _threshold = end_card_addr;
           }
-          if (p->klass_or_null() != NULL) {
+          if (p->klass_or_null_acquire() != NULL) {
             // Redirty the range of cards...
             _mut->mark_range(redirty_range);
           } // ...else the setting of klass will dirty the card anyway.
@@ -7621,7 +7609,7 @@ bool Par_MarkFromRootsClosure::do_bit(size_t offset) {
     assert(_skip_bits == 0, "tautology");
     _skip_bits = 2;  // skip next two marked bits ("Printezis-marks")
     oop p = oop(addr);
-    if (p->klass_or_null() == NULL) {
+    if (p->klass_or_null_acquire() == NULL) {
       // in the case of Clean-on-Enter optimization, redirty card
       // and avoid clearing card by increasing  the threshold.
       return true;
@@ -8608,7 +8596,7 @@ size_t SweepClosure::do_live_chunk(FreeChunk* fc) {
            "alignment problem");
 
 #ifdef ASSERT
-      if (oop(addr)->klass_or_null() != NULL) {
+      if (oop(addr)->klass_or_null_acquire() != NULL) {
         // Ignore mark word because we are running concurrent with mutators
         assert(oop(addr)->is_oop(true), "live block should be an oop");
         assert(size ==
@@ -8619,7 +8607,7 @@ size_t SweepClosure::do_live_chunk(FreeChunk* fc) {
 
   } else {
     // This should be an initialized object that's alive.
-    assert(oop(addr)->klass_or_null() != NULL,
+    assert(oop(addr)->klass_or_null_acquire() != NULL,
            "Should be an initialized object");
     // Ignore mark word because we are running concurrent with mutators
     assert(oop(addr)->is_oop(true), "live block should be an oop");

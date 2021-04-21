@@ -453,7 +453,7 @@ class CommandLineFlags {
 // notproduct flags are settable / visible only during development and are not declared in the PRODUCT version
 
 // A flag must be declared with one of the following types:
-// bool, intx, uintx, ccstr, double, or uint64_t.
+// bool, intx, uintx, ccstr.
 // The type "ccstr" is an alias for "const char*" and is used
 // only in this file, because the macrology requires single-token type names.
 
@@ -3499,6 +3499,9 @@ class CommandLineFlags {
   notproduct(bool, CIObjectFactoryVerify, false,                            \
           "enable potentially expensive verification in ciObjectFactory")   \
                                                                             \
+  diagnostic(bool, AbortVMOnCompilationFailure, false,                      \
+          "Abort VM when method had failed to compile.")                    \
+                                                                            \
   /* Priorities */                                                          \
   product_pd(bool, UseThreadPriorities,  "Use native thread priorities")    \
                                                                             \
@@ -3873,7 +3876,7 @@ class CommandLineFlags {
   product(uintx, SharedMiscDataSize,    NOT_LP64(2*M) LP64_ONLY(4*M),       \
           "Size of the shared miscellaneous data area (in bytes)")          \
                                                                             \
-  product(uintx, SharedMiscCodeSize, AARCH64_ONLY(192*K) NOT_AARCH64(120*K),\
+  product(uintx, SharedMiscCodeSize,    AARCH64_ONLY(192*K) NOT_AARCH64(120*K), \
           "Size of the shared miscellaneous code area (in bytes)")          \
                                                                             \
   product(uintx, SharedBaseAddress, LP64_ONLY(32*G)                         \
@@ -4030,9 +4033,6 @@ class CommandLineFlags {
                                                                             \
   JFR_ONLY(product(bool, LogJFR, false,                                     \
           "Enable JFR logging (consider +Verbose)"))                        \
-                                                                            \
-  diagnostic(bool, UseUnalignedAccesses, false,                             \
-          "Use unaligned memory accesses in sun.misc.Unsafe")
 
 /*
  *  Macros for factoring of globals
